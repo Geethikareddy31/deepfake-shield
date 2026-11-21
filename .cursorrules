@@ -1,0 +1,5 @@
+This is a monorepo for DeepFake Shield with /backend and /frontend.
+- Always follow the schema and endpoints defined in api_contract.json.
+- Keep ML inference logic modular inside /backend.
+- Keep UI components clean and decoupled from raw model code inside /frontend.
+- Do not modify API response field names without updating api_contract.json and notifying both teammates.

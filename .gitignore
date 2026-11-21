@@ -1,0 +1,21 @@
+# Python / Backend
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+*.pt
+*.pth
+*.onnx
+
+# Frontend / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+.env
+.env.local
+
+# Shared test audio (if large)
+sample_audio/*.wav
+sample_audio/*.mp3
+!sample_audio/.gitkeep
