@@ -1,0 +1,43 @@
+{
+  "endpoints": {
+    "analyze": {
+      "method": "POST",
+      "path": "/api/v1/analyze",
+      "request": {
+        "contentType": "multipart/form-data",
+        "fields": {
+          "file": "binary (audio/wav, audio/mp3)"
+        }
+      },
+      "response": {
+        "scan_id": "scn_8921a",
+        "filename": "suspicious_voicemail.wav",
+        "verdict": "SYNTHETIC",
+        "spoof_probability": 94.2,
+        "confidence": 94.2
+      }
+    },
+    "history": {
+      "method": "GET",
+      "path": "/api/v1/history",
+      "response": [
+        {
+          "scan_id": "scn_8921a",
+          "filename": "suspicious_voicemail.wav",
+          "verdict": "SYNTHETIC",
+          "confidence": 94.2
+        }
+      ]
+    },
+    "metrics": {
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "response": {
+        "accuracy": 0.96,
+        "precision": 0.95,
+        "recall": 0.97,
+        "f1_score": 0.96
+      }
+    }
+  }
+}
