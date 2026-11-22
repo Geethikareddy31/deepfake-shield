@@ -19,3 +19,4 @@ frontend/.next/
 sample_audio/*.wav
 sample_audio/*.mp3
 !sample_audio/.gitkeep
+evaluation/test_audio/
