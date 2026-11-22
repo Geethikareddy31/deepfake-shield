@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useWavesurfer } from '@wavesurfer/react';
-import { mockMetrics, mockHistory, mockAnalyzeFile } from './mocks/mockData';
+import { analyzeAudio, fetchHistory, fetchMetrics } from './services/api';
+import { mockMetrics } from './mocks/mockData';
 import './App.css';
 
 function App() {
@@ -8,19 +9,31 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
-  const [history, setHistory] = useState(mockHistory);
+  const [history, setHistory] = useState([]);
+  const [metrics, setMetrics] = useState(mockMetrics);
 
-  // Waveform container ref
   const containerRef = useRef(null);
   const { wavesurfer, isPlaying, currentTime } = useWavesurfer({
     container: containerRef,
     url: audioUrl,
-    waveColor: '#646cff',
-    progressColor: '#42b883',
+    waveColor: '#38bdf8',
+    progressColor: '#34d399',
     height: 80,
-    barWidth: 2,
+    barWidth: 3,
+    barRadius: 2,
   });
+
+  useEffect(() => {
+    fetchHistory()
+      .then((data) => setHistory(Array.isArray(data) ? data : data.scans || []))
+      .catch(() => console.warn('Backend history unavailable yet'));
+
+    fetchMetrics()
+      .then((data) => setMetrics(data))
+      .catch(() => console.warn('Using fallback metrics'));
+  }, []);
 
   const onPlayPause = () => {
     wavesurfer && wavesurfer.playPause();
@@ -30,6 +43,7 @@ function App() {
     const file = e.target.files[0];
     setSelectedFile(file);
     setResult(null);
+    setError(null);
     if (file) {
       setAudioUrl(URL.createObjectURL(file));
     } else {
@@ -43,35 +57,41 @@ function App() {
 
     setLoading(true);
     setResult(null);
+    setError(null);
+
     try {
-      const data = await mockAnalyzeFile(selectedFile);
+      const data = await analyzeAudio(selectedFile);
       setResult(data);
-      setHistory((prev) => [data, ...prev]);
+      const updatedHistory = await fetchHistory();
+      setHistory(Array.isArray(updatedHistory) ? updatedHistory : updatedHistory.scans || []);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not connect to FastAPI backend. Ensure server is running on port 8000.');
     } finally {
       setLoading(false);
     }
   };
 
+  const isFake = result?.verdict?.includes('SYNTHETIC') || result?.verdict?.includes('SCAM');
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
-      <header style={{ marginBottom: '2rem', borderBottom: '1px solid #333', paddingBottom: '1rem' }}>
-        <h1>Deepfake Shield</h1>
-        <p style={{ color: '#888' }}>Synthetic Voice & Deepfake Audio Detection Dashboard</p>
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <div>
+          <h1>Deepfake Shield</h1>
+          <p>Advanced Forensic Audio Authenticity & Synthetic Voice Detection</p>
+        </div>
+        <div style={{ fontSize: '0.8rem', background: '#1e293b', padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid #334155', color: '#38bdf8' }}>
+          System: Ready
+        </div>
       </header>
 
       {/* Navigation Tabs */}
-      <nav style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+      <nav className="nav-tabs">
         {['analyze', 'history', 'benchmark'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            style={{
-              padding: '0.6rem 1.2rem',
-              textTransform: 'capitalize',
-              fontWeight: activeTab === tab ? 'bold' : 'normal',
-              borderBottom: activeTab === tab ? '2px solid #646cff' : 'none',
-              cursor: 'pointer',
-            }}
+            className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
           >
             {tab}
           </button>
@@ -80,106 +100,147 @@ function App() {
 
       {/* Tab 1: Analyze */}
       {activeTab === 'analyze' && (
-        <section>
+        <div className="panel-card">
           <h2>Analyze Audio Clip</h2>
-          <p style={{ fontSize: '0.9rem', color: '#888' }}>Supported formats: WAV, MP3, FLAC, OGG, M4A</p>
-          <form onSubmit={handleAnalyze} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-            <input
-              type="file"
-              accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a"
-              onChange={handleFileChange}
-            />
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+            Upload WAV, MP3, or OGG audio files for deep neural network forensic examination.
+          </p>
 
-            {/* Wavesurfer Waveform Container */}
+          <form onSubmit={handleAnalyze} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="file-drop-zone">
+              <input
+                type="file"
+                accept=".wav,.mp3,.ogg,audio/*"
+                onChange={handleFileChange}
+                style={{ color: '#94a3b8' }}
+              />
+            </div>
+
             {audioUrl && (
-              <div style={{ padding: '1rem', background: '#1a1a1a', borderRadius: '8px', marginTop: '0.5rem' }}>
+              <div style={{ padding: '1.25rem', background: '#0f172a', borderRadius: '8px', border: '1px solid #334155' }}>
                 <div ref={containerRef} style={{ marginBottom: '1rem' }} />
-                <button
-                  type="button"
-                  onClick={onPlayPause}
-                  style={{ padding: '0.4rem 1rem', cursor: 'pointer' }}
-                >
-                  {isPlaying ? 'Pause ⏸️' : 'Play Audio  ▶️'}
-                </button>
-                <span style={{ marginLeft: '1rem', fontSize: '0.85rem', color: '#aaa' }}>
-                  Time: {currentTime.toFixed(1)}s
-                </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button type="button" onClick={onPlayPause} className="action-btn" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
+                    {isPlaying ? 'Pause ⏸️' : 'Play Audio ▶️'}
+                  </button>
+                  <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                    Elapsed: {currentTime.toFixed(1)}s
+                  </span>
+                </div>
               </div>
             )}
 
             <button
               type="submit"
               disabled={!selectedFile || loading}
-              style={{ width: 'fit-content', padding: '0.6rem 1.5rem', cursor: 'pointer' }}
+              className="action-btn"
+              style={{ width: 'fit-content' }}
             >
-              {loading ? 'Analyzing Audio...' : 'Run Detection'}
+              {loading ? 'Running PyTorch Inference...' : 'Run Forensic Analysis'}
             </button>
           </form>
 
-          {result && (
-            <div
-              style={{
-                marginTop: '1.5rem',
-                padding: '1.5rem',
-                borderRadius: '8px',
-                border: `1px solid ${result.is_deepfake ? '#ef4444' : '#22c55e'}`,
-                backgroundColor: result.is_deepfake ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-              }}
-            >
-              <h3>{result.is_deepfake ? '⚠️ Synthetic / Deepfake Audio Detected' : '✅ Authentic Human Voice'}</h3>
-              <p><strong>Audio File:</strong> {result.filename}</p>
-              <p><strong>Confidence:</strong> {(result.confidence_score * 100).toFixed(1)}%</p>
-              <p><strong>Processing Time:</strong> {result.processing_time_ms} ms</p>
+          {error && (
+            <div style={{ marginTop: '1.25rem', padding: '1rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#f87171' }}>
+              ⚠️ {error}
             </div>
           )}
-        </section>
+
+          {result && (
+            <div className={`verdict-box ${isFake ? 'fake' : 'authentic'}`}>
+              <h3 style={{ margin: '0 0 0.75rem 0', color: isFake ? '#f87171' : '#4ade80' }}>
+                {isFake ? '⚠️ Synthetic / Deepfake Audio Detected' : '✅ Genuine Human Voice Verified'}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', fontSize: '0.925rem', color: '#cbd5e1' }}>
+                <p><strong>Filename:</strong> {result.filename}</p>
+                <p><strong>Verdict Type:</strong> {result.verdict}</p>
+                <p><strong>Confidence:</strong> {(result.confidence <= 1 ? result.confidence * 100 : result.confidence).toFixed(1)}%</p>
+                {result.spoof_probability !== undefined && (
+                  <p><strong>Spoof Probability:</strong> {(result.spoof_probability <= 1 ? result.spoof_probability * 100 : result.spoof_probability).toFixed(1)}%</p>
+                )}
+              </div>
+
+              {result.segments && result.segments.length > 0 && (
+                <div style={{ marginTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0' }}>Flagged Time Segments</h4>
+                  <ul style={{ paddingLeft: '1.2rem', margin: 0, color: '#cbd5e1' }}>
+                    {result.segments.map((seg, idx) => (
+                      <li key={idx} style={{ color: seg.flag ? '#f87171' : '#4ade80', marginBottom: '0.25rem' }}>
+                        {seg.start_sec}s – {seg.end_sec}s: Spoof Prob {(seg.spoof_prob * 100).toFixed(1)}% {seg.flag ? '(Anomaly Flagged)' : '(Clean)'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result.spectrogram_base64 && (
+                <div style={{ marginTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0' }}>Mel-Spectrogram Forensic Map</h4>
+                  <img
+                    src={`data:image/png;base64,${result.spectrogram_base64}`}
+                    alt="Mel-Spectrogram"
+                    style={{ width: '100%', borderRadius: '6px', border: '1px solid #334155' }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Tab 2 & 3 remain the same */}
+      {/* Tab 2: History */}
       {activeTab === 'history' && (
-        <section>
-          <h2>Audio Scan History</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #444' }}>
-                <th style={{ padding: '0.75rem' }}>Audio File</th>
-                <th style={{ padding: '0.75rem' }}>Verdict</th>
-                <th style={{ padding: '0.75rem' }}>Confidence</th>
-                <th style={{ padding: '0.75rem' }}>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((item) => (
-                <tr key={item.id} style={{ borderBottom: '1px solid #222' }}>
-                  <td style={{ padding: '0.75rem' }}>{item.filename}</td>
-                  <td style={{ padding: '0.75rem', color: item.is_deepfake ? '#ef4444' : '#22c55e' }}>
-                    {item.is_deepfake ? 'Deepfake' : 'Authentic'}
-                  </td>
-                  <td style={{ padding: '0.75rem' }}>{(item.confidence_score * 100).toFixed(1)}%</td>
-                  <td style={{ padding: '0.75rem' }}>{new Date(item.timestamp).toLocaleTimeString()}</td>
+        <div className="panel-card">
+          <h2>SQLite Scan History</h2>
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Recent audio forensic evaluations logged in backend database.</p>
+          {history.length === 0 ? (
+            <p style={{ color: '#64748b', marginTop: '1.5rem' }}>No scan history recorded yet.</p>
+          ) : (
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Audio File</th>
+                  <th>Verdict</th>
+                  <th>Confidence</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+              </thead>
+              <tbody>
+                {history.map((item, idx) => {
+                  const fakeRow = item.verdict?.includes('SYNTHETIC') || item.verdict?.includes('SCAM');
+                  return (
+                    <tr key={item.scan_id || idx}>
+                      <td>{item.filename}</td>
+                      <td style={{ color: fakeRow ? '#f87171' : '#4ade80', fontWeight: '600' }}>
+                        {item.verdict}
+                      </td>
+                      <td>{(item.confidence <= 1 ? item.confidence * 100 : item.confidence).toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
 
+      {/* Tab 3: Benchmark */}
       {activeTab === 'benchmark' && (
-        <section>
-          <h2>Audio Model Evaluation Metrics</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '1rem' }}>
-            {Object.entries(mockMetrics).map(([key, value]) => (
-              <div key={key} style={{ padding: '1.5rem', border: '1px solid #333', borderRadius: '8px' }}>
-                <div style={{ textTransform: 'uppercase', fontSize: '0.85rem', color: '#888' }}>
+        <div className="panel-card">
+          <h2>Model Evaluation Metrics</h2>
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Performance benchmarks evaluated on clean vs. compressed test datasets.</p>
+          <div className="metrics-grid">
+            {Object.entries(metrics).map(([key, value]) => (
+              <div key={key} className="metric-card">
+                <div style={{ textTransform: 'uppercase', fontSize: '0.75rem', color: '#94a3b8', letterSpacing: '0.05em' }}>
                   {key.replace('_', ' ')}
                 </div>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
+                <div style={{ fontSize: '2.25rem', fontWeight: '700', marginTop: '0.5rem', color: '#38bdf8' }}>
                   {(value * 100).toFixed(1)}%
                 </div>
               </div>
             ))}
           </div>
-        </section>
+        </div>
       )}
     </div>
   );
